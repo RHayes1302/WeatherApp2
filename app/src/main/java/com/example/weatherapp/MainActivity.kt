@@ -26,11 +26,13 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.runtime.rememberCoroutineScope
+import com.example.weatherapp.data.Weather
 import com.example.weatherapp.network.AppConstants
 import com.example.weatherapp.network.RetrofitClient
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+// Class 2
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -52,6 +54,9 @@ fun WeatherScreen() {
     var cityResult by remember { mutableStateOf("city:--") }
     var temResult by remember { mutableStateOf("Tempature: --") }
     var descResult by remember { mutableStateOf("Description:--") }
+    var windResult by remember { mutableStateOf("Wind Speed:--") }
+    var humidityResult by remember { mutableStateOf("Humidity") }
+    var isLoading by remember { mutableStateOf(false) }
 
     val context = LocalContext.current // Toast.makeText() requires Android context
     val scope = rememberCoroutineScope() // Step 1: needed to launch a coroutine from onClick
@@ -64,11 +69,13 @@ fun WeatherScreen() {
             modifier = Modifier.fillMaxWidth()
         )
         Button(
+            enabled = !isLoading,
             onClick = {
                 val trimmedCity = city.trim()
                 if (trimmedCity.isEmpty()) {
                     Toast.makeText(context, "Please enter a city name", Toast.LENGTH_SHORT).show()
                 } else {
+                    isLoading = true
                     // Step 2: launch a coroutine tied to this composable's lifecycle
                     scope.launch {
                         // Step 7: wrap the network call and result handling in try/catch
@@ -82,6 +89,8 @@ fun WeatherScreen() {
                                     AppConstants.Unit
                                 )
                             }
+                            Log.d("WeatherApp", "Request URL: ${response.raw().request.url}")
+                            Log.d("WeatherApp", "Response Code: ${response.code()}")
 
                             // Step 5: update the UI state on success
                             if (response.isSuccessful) {
@@ -89,16 +98,29 @@ fun WeatherScreen() {
                                 if (weather != null) {
                                     cityResult = "City: ${weather.name}"
                                     temResult = "Tempature: ${weather.main.temp}"
-                                    descResult = "Description: ${weather.weather.firstOrNull()?.description ?: "--"}"
+                                    descResult =
+                                        "Description: ${weather.weather.firstOrNull()?.description ?: "--"}"
+                                    // ASSIGNMENT 2, step 1: wind speed
+                                    windResult = "Wind Speed: ${weather.wind.speed}m/s"
+                                    // ASSIGNMENT 2, step 2: humidity
+                                    humidityResult = "Humidity: ${weather.main.humidity}%"
                                 }
                             } else {
                                 // Step 6: not successful (e.g. city not found)
-                                Log.e("WeatherApp", "HTTP error: ${response.code()} ${response.errorBody()?.string()}")
-                                Toast.makeText(
-                                    context,
-                                    "City not found. Check the name and try again.",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                Log.e(
+                                    "WeatherApp",
+                                    "HTTP error: ${response.code()} ${
+                                        response.errorBody()?.string()
+                                    }"
+                                )
+                                // ASSIGNMENT 2, step 3: differentiate error messages by status code
+                                val message = when (response.code()) {
+                                    404 -> "City not found. Check the name and try again."
+                                    401 -> "Invalid API key. Please check your configuration."
+                                    429 -> "Too many requests. Please wait a moment and try again."
+                                    else -> "Something went wrong (code ${response.code()})."
+                                }
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                             }
                         } catch (e: Exception) {
                             // Step 7: network/connection failure
@@ -108,16 +130,20 @@ fun WeatherScreen() {
                                 "Network error. Check your connection.",
                                 Toast.LENGTH_SHORT
                             ).show()
+                        } finally {
+                            isLoading = false
                         }
                     }
                 }
             },
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
         ) {
-            Text("Get Weather")
+            Text(if (isLoading) "Loading..." else "Get Weather")
         }
         Text(cityResult, fontSize = 20.sp, modifier = Modifier.padding(top = 24.dp))
         Text(temResult, fontSize = 18.sp, modifier = Modifier.padding(top = 8.dp))
         Text(descResult, fontSize = 18.sp, modifier = Modifier.padding(top = 8.dp))
+        Text(windResult, fontSize = 18.sp, modifier = Modifier.padding(top = 8.dp))
+        Text(humidityResult, fontSize = 18.sp, modifier = Modifier.padding(top = 8.dp))
     }
 }
